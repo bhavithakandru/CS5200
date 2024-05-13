@@ -1,0 +1,191 @@
+---
+title: "KandruB.CS5200.SQL-Queries.Sp24.Rmd"
+output:
+  html_document:
+    df_print: paged
+---
+```{r connect2DB, echo=F, warning=F}
+library(RSQLite)
+library(DBI)
+dbcon <- dbConnect(RSQLite::SQLite(),dbname = "MediaDB.db")
+knitr::opts_chunk$set(connection = "dbcon")
+```
+
+```{sql connection=dbcon, echo=F}
+PRAGMA foreign_keys = ON
+```
+```{r}
+dbListTables(dbcon)
+dbListFields(dbcon,'genres')
+```
+1) What are the last name, first name, title, and hire date of all employees, sorted by last name?
+```{sql connection=dbcon}
+SELECT LastName,FirstName,Title,HireDate
+FROM employees
+ORDER BY LastName;
+```
+2) What are the names of each genre and the number of distinct albums in that genre? 
+```{sql connection=dbcon}
+SELECT g.Name, COUNT(DISTINCT a.AlbumId) AS NumberOfAlbums
+FROM genres g
+JOIN tracks t ON g.GenreId = t.GenreId
+JOIN albums a ON t.AlbumId = a.AlbumId
+GROUP BY g.Name;
+```
+3) What are the distinct media types?
+```{sql connection=dbcon}
+SELECT DISTINCT Name 
+FROM media_types;
+```
+4) List the number of tracks by genre, ordered from most to least, restricted to those genres for which there are at least four tracks.
+```{sql connection=dbcon}
+SELECT g.Name, COUNT(t.TrackID) AS NumberOfTracks
+FROM genres g
+JOIN Tracks t ON g.GenreID=t.GenreID
+GROUP BY g.Name 
+HAVING COUNT(t.TrackID)>=4
+ORDER BY NumberOfTracks DESC;
+```
+5) What is the last name and first name of the youngest employee?
+Hint: SQLite does not support DATEDIFF but does support STRFTIME (see tutorial Links to an external site.). You need to only take year and month into account.
+```{sql connection=dbcon}
+SELECT LastName,FirstName 
+FROM employees
+ORDER BY STRFTIME('%Y-%M',BirthDate) DESC
+LIMIT 1;
+```
+6) What are the total number of unique purchases for each Brazilian state (e.g., MG, SP, etc.), ordered alphabetically by state, and in which there were at least two purchases?
+```{sql connection=dbcon}
+SELECT c.state, COUNT(DISTINCT i.InvoiceID) AS NumberOfPurchase
+FROM customers c
+JOIN invoices i ON c.CustomerID=i.CustomerID
+WHERE c.Country = "Brazil"
+GROUP BY c.state 
+HAVING COUNT(DISTINCT i.InvoiceID)>=2
+ORDER BY c.State;
+```
+7) How many employees never worked with a single customer, i.e., they appear in the employees table but not in the customers table?
+```{sql connection=dbcon}
+SELECT count(EmployeeId)
+FROM employees
+WHERE EmployeeId NOT IN (SELECT SupportRepId FROM customers);
+```
+8) How many albums contain the substring "Classic" but not "Hard" in the album title?
+```{sql connection=dbcon}
+SELECT COUNT(*)
+FROM albums
+WHERE Title LIKE "%Classic%" AND Title NOT LIKE "%Hard%";
+```
+9) What is the total number of distinct genres?
+```{sql connection=dbcon}
+SELECT DISTINCT COUNT(*)
+FROM genres;
+```
+10) What is the total "time" of all tracks per album type in hours, i.e., add up the "Milliseconds" column in tracks? Display the media type and the time in hours rounded to one decimals. Only consider media types with at least one track.
+```{sql connection=dbcon}
+SELECT m.Name, ROUND(SUM(t.Milliseconds)/3600000.0, 1) AS TimeInHours
+FROM tracks t
+JOIN media_types m ON t.MediaTypeId = m.MediaTypeId
+GROUP BY m.MediaTypeId
+HAVING COUNT(t.trackId)>=1 
+ORDER BY TimeInHours;
+```
+11) What is the title and artist name of the longest album, in terms of minutes of playtime of all tracks on that albums?
+```{sql connection=dbcon}
+SELECT alb.Title, art.Name, t.Milliseconds
+FROM albums alb
+JOIN artists art ON alb.ArtistId = art.ArtistId
+JOIN tracks t ON alb.AlbumId = t.AlbumId
+GROUP BY alb.AlbumId
+ORDER BY SUM(t.Milliseconds) DESC
+LIMIT 1;
+```
+12) Which genre has the least number of tracks?
+```{sql connection=dbcon}
+SELECT g.Name AS GenreName, t.Composer
+FROM genres g
+JOIN tracks t ON g.GenreID=t.GenreId
+GROUP BY g.GenreID
+ORDER BY COUNT(t.TrackID) 
+LIMIT 1;
+```
+13) Which media format has the fewest tracks?
+```{sql connection=dbcon}
+SELECT m.Name AS MediaFormat
+FROM media_types m
+JOIN tracks t ON m.MediaTypeID=t.MediaTypeId
+GROUP BY m.MediaTypeId
+ORDER BY COUNT(t.TrackID) 
+LIMIT 1;
+```
+14) For each country, what is the total number of unique customers and the total spent?
+```{sql connection=dbcon}
+SELECT c.Country, COUNT(DISTINCT c.CustomerId) AS NumberOfCustomers,
+SUM(i.Total) AS TotalSpent 
+FROM customers c
+JOIN invoices i ON c.CustomerId = i.CustomerId
+GROUP BY c.Country;
+```
+15) What is the total amount spent by all customers who do not live in South America?
+```{sql connection=dbcon}
+SELECT SUM(ii.UnitPrice * ii.Quantity) AS TotalSpent
+FROM invoices AS i
+JOIN customers AS c ON i.CustomerId = c.CustomerId
+JOIN invoice_items AS ii ON i.InvoiceId = ii.InvoiceId
+WHERE c.Country NOT IN ('Brazil', 'Argentina', 'Chile', 'Colombia', 'Peru', 'Venezuela', 'Ecuador', 'Bolivia', 'Paraguay', 'Uruguay', 'Guyana', 'Suriname');
+```
+16) What is the difference in spending on any type of MPEG vs any type of AAC track?
+```{sql connection=dbcon}
+SELECT(
+  (SELECT SUM(ii.UnitPrice * ii.Quantity)
+   FROM invoice_items ii
+   JOIN tracks t ON ii.TrackId = t.TrackId
+   JOIN media_types mt ON t.MediaTypeId = mt.MediaTypeId
+   WHERE mt.Name LIKE '%MPEG%') -
+  (SELECT SUM(ii.UnitPrice * ii.Quantity)
+   FROM invoice_items ii
+   JOIN tracks t ON ii.TrackId = t.TrackId
+   JOIN media_types mt ON t.MediaTypeId = mt.MediaTypeId
+   WHERE mt.Name LIKE '%AAC%')) AS Difference;
+```
+17) Which country has the most customers?
+```{sql connection=dbcon}
+SELECT Country, COUNT(*) AS MostCustomers
+FROM customers
+GROUP BY Country
+ORDER BY MostCustomers DESC
+limit 1;
+```
+18) How many tracks did "Amy Winehouse" record?
+```{sql connection=dbcon}
+SELECT art.Name, COUNT(alb.AlbumId) AS NumberOfTracks
+FROM artists art
+JOIN albums alb ON art.ArtistId=alb.ArtistId
+JOIN tracks t ON alb.AlbumId = t.AlbumId
+WHERE art.Name = "Amy Winehouse";
+```
+19) What is the name of the artist who earned the most, i.e., whose aggregate total of all tracks sold is the highest?
+```{sql connection=dbcon}
+SELECT a.Name, COUNT(i.UnitPrice*i.Quantity) AS Earnings
+FROM invoice_items i
+JOIN tracks t ON i.TrackId = t.TrackId
+JOIN albums alb ON t.AlbumId = alb.AlbumId 
+JOIN artists a ON alb.ArtistId = a.ArtistId
+GROUP BY a.ArtistId
+ORDER BY Earnings DESC
+LIMIT 1;
+```
+20) Which artist is the most popular in Paris? Popularity is defined in this context as the artist who was purchased most often by someone living in Paris.
+```{sql connection=dbcon}
+SELECT art.Name, COUNT(*) AS MostPurchases
+FROM invoices i 
+JOIN customers c ON i.CustomerId = c.CustomerId
+JOIN invoice_items ii ON i.InvoiceId = ii.InvoiceId
+JOIN tracks t ON ii.TrackId = t.TrackId
+JOIN albums a ON t.AlbumId = a.AlbumId
+JOIN artists art ON a.ArtistId = art.ArtistId
+WHERE c.city = "Paris"
+GROUP BY art.ArtistId
+ORDER BY MostPurchases DESC
+LIMIT 1;
+```
