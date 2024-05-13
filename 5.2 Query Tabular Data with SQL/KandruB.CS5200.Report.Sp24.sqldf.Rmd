@@ -1,0 +1,77 @@
+---
+title: "ASSIGNMENT 05.2: Query Tabular Data with SQL"
+author: "Bhavitha Naga Sai Kandru"
+date: "Spring 2024"
+output: html_document
+---
+## Analysis of resturant visits
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Loading packages.
+library(sqldf)
+library(knitr)
+library(dplyr)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Loading the data from URL.
+url1<-"https://s3.us-east-2.amazonaws.com/artificium.us/assignments/80.xml/a-80-305/gen-xml/synthsalestxns-Jan2Mar.csv"
+url2<- "https://s3.us-east-2.amazonaws.com/artificium.us/assignments/80.xml/a-80-305/gen-xml/synthsalestxns-Sep2Oct.csv"
+url3<- "https://s3.us-east-2.amazonaws.com/artificium.us/assignments/80.xml/a-80-305/gen-xml/synthsalestxns-Nov2Dec.csv"
+jan_to_mar <- read.csv(url1) 
+sep_to_oct <- read.csv(url2)
+nov_to_dec <- read.csv(url3)
+sales <- rbind(jan_to_mar,sep_to_oct,nov_to_dec)
+```
+
+```{r echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+## Sale Analysis
+# one has total visits, names of restaurant, start and end dates, the average and standard deviation of amount
+# two has most visted resturant 
+# three has the largest sale
+# four has the average guests and also the wine percentage
+
+one<-sqldf("SELECT COUNT(*) AS Total_Visits, COUNT(DISTINCT restaurant) AS Restaurants,
+                               MIN(date) AS Start_Date, MAX(date) AS End_Date,
+                               AVG(CAST(REPLACE(amount, '$', '') AS DECIMAL(10, 2))) AS Average,     
+                               STDEV(CAST(REPLACE(amount, '$', '') AS DECIMAL(10, 2))) AS Standard_Deviation
+                               FROM sales;")
+two<-sqldf("SELECT restaurant AS Most_Visited
+FROM sales
+GROUP BY restaurant
+ORDER BY count(*) DESC
+LIMIT 1;")
+
+three<-sqldf("SELECT restaurant AS Largest_Revenue from sales 
+      group by restaurant
+      order by sum(CAST(REPLACE(amount, '$', '') AS DECIMAL(10, 2))) desc
+      limit 1;")
+
+four<-sqldf("SELECT ROUND(AVG(guests)) AS Guests,
+              AVG(CASE WHEN wine = 'Yes' THEN 1 ELSE 0 END) * 100 AS Wine_Consumption_Percentage
+              FROM sales;")
+
+result<-data.frame(one,two,three,four)
+```
+
+
+```{r echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+### Displaying the name,total number of visits, avg revenue per restaurant 
+query <- "
+  SELECT 
+    restaurant,
+    COUNT(*) AS total_visits,
+    ROUND(AVG(CAST(REPLACE(amount, '$', '') AS DECIMAL(10, 2))),2) AS average_revenue
+  FROM 
+    sales
+  GROUP BY 
+    restaurant
+"
+
+data <- sqldf(query)
+
+# Display the results using kable
+kable(data,
+      caption = "Total number of visits and average revenue per restaurant",
+      col.names = c("Restaurant Name", "Total Visits", "Average Revenue"),
+      align = c("l", "c", "r"))
+```
