@@ -1,0 +1,45 @@
+---
+title: "Calculate Reliability"
+name: "Bhavitha Kandru"
+output:  
+  pdf_document: default
+---
+
+## Question 1
+An analytics group has build a distributed data lake as part of a new data warehouse. The data warehouse consists of a number of distinct components, including a database on a cloud server (99.987% availability), two identical database management system servers (99.3%), an analytics logic server (94.7%), and, of course, the network infrastructure to the cloud server, which has an availability of 98.37%. What is the overall availability of the system, expressed as a percentage with three digits of precision? Show your work.
+
+The mathematical formula to caluclate teh system availability(SA) is:
+SA=(CloudServer)×(DBMSServer1)×(DBMSServer2)×(AnalyticsServer)×(NetworkInfrastructure)
+
+```{r}
+cloud_server<-0.99987 # converted percentages into decimals
+dbms_server<-0.993 # here dbms servers are identical as given, so we are multiplying twice.
+analytical_server<-0.947
+infrastructure<-0.9837
+system_availability<- cloud_server * (dbms_server ^ 2) * analytical_server * infrastructure
+system_availability_percantage <- system_availability * 100
+cat("System availability is",system_availability, "\n")
+cat("The percentage of network infrasturcture avalability is",system_availability_percantage,"%")
+```
+
+## Question 2:
+A RAID 1+0 storage system has an estimated MBTF of 1,450,000 hours. What is the expected annual reliability? Show your work.
+
+To calculate the expected annual reliability of a RAID 1+0 storage system with an estimated Mean Time Between Failures (MTBF) of 1,450,000 hours, we'll use the exponential reliability function. This function is used to estimate the probability that a system will successfully operate without failure over a certain period of time.
+The mathematical formula for this is:
+R(t)=e^-t/MTBF
+where,
+R(t) is the reliability at time t,
+e is the base of the natural logarithm 
+t is the time in hours for which we want to calculate the reliability,
+MTBF is the Mean Time Between Failures in hours.
+
+```{r}
+MTBF <- 1450000
+time <- 8760 # hours in a year
+
+annual_reliability <- exp(-time / MTBF)
+annual_reliability_percentage <- annual_reliability * 100
+cat("The caluclated annual reliability percentage is", annual_reliability_percentage,"%")
+```
+

@@ -1,0 +1,125 @@
+---
+title: "Assignment / Explore Query Planning"
+author: "Bhavitha kandru"
+date: "Spring 2024"
+output:
+  pdf_document: default
+---
+
+Load library
+```{r}
+library(RSQLite)
+library(sqldf)
+library(RMySQL)
+```
+
+load database
+```{r}
+con <- dbConnect(RSQLite::SQLite(), dbname="sakila.db")
+```
+## Question 1:
+Ensuring that no user-defined indexes exist (delete all user-defined indexes that you may have created, if there are any; remember that your program can be run more than once), find the number of films per language. The query should return the language name and the number of films in each language.
+```{r}
+# Get a list of all user-defined indexes (excluding auto-created ones for primary keys)
+indexes <- dbGetQuery(con, "SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL;")
+
+# Drop each user-defined index
+for (index_name in indexes$name) {
+  dbExecute(con, paste0("DROP INDEX IF EXISTS ", index_name, ";"))
+}
+
+
+# Number of films:
+films <- "
+SELECT lang.name AS language_name, Count(film.film_id) AS number_of_films
+FROM film
+JOIN language lang ON film.language_id = lang.language_id
+GROUP BY lang.name
+ORDER BY number_of_films DESC;
+"
+
+# Execute the query
+films_per_language <- dbGetQuery(con, films)
+
+# View the result
+print(films_per_language)
+```
+## Question 2:
+Find out how to get the query plans for SQLite then display the query plans for the query executions in (1).
+```{r}
+# Execute the EXPLAIN QUERY PLAN
+query_plan <- dbGetQuery(con,paste("EXPLAIN QUERY PLAN",films))
+
+# Display the query plan
+print(query_plan)
+
+```
+## Question 3: 
+Write a SQL query against the SQLite database that returns the title, category name and length of the film with the title "ZORRO ARK".
+```{r}
+title <-"SELECT f.title, c.name AS category_name, f.length
+FROM film f
+JOIN film_category fc ON f.film_id = fc.film_id
+JOIN category c ON fc.category_id = c.category_id
+WHERE f.title = 'ZORRO ARK';
+"
+ark <- dbGetQuery(con,title)
+print(ark)
+```
+## Question 4:
+For the query in (3), display the query plan.
+```{r}
+# Execute the EXPLAIN QUERY PLAN
+plan <- dbGetQuery(con,paste("EXPLAIN QUERY PLAN", title))
+
+# Display the query plan
+print(plan)
+```
+## Question 5:
+In the SQLite database, create a user-defined index called "TitleIndex" on the column TITLE in the table FILM.
+```{r}
+dbExecute(con,"CREATE INDEX TitleIndex on film(title)")
+```
+
+## Question 6:
+Re-run the query from (3) now that you have an index and display the query plan.
+```{r}
+result <- dbGetQuery(con, title)
+print(result)
+```
+## Question 7:
+Are the query plans the same in (4) and (6)? What are the differences?  How do you know from the query plan whether it uses an index or not? Comment on the differences.
+
+No the queries in question 4 and 6 are not same beacuse the query plans in questions 4 and 6 as the latter uses the TitleIndex for efficient data retrieval, resulting in the use of the index being explicitly mentioned in the plan. Typically, indexes improve query performance by reducing the need for full table scans, although the actual impact on execution time can vary based on query complexity and data size.
+
+## Question 8:
+Measure the execution time of your queries (within R) for (3) and (6), i.e., the query with and without an index. Is there a difference in execution time? What is the difference? Comment on the differences.
+
+Indexes can speed up query execution time by optimizing lookup efficiency, particularly for large datasets. If an indexed query takes longer, it could be due to overhead or specific query characteristics. In such cases, it is essential to examine query design and index utilization more closely.
+
+## Question 9: 
+Write a SQL query against the SQLite database that returns the title, language and length of all films with the word "GOLD" with any capitalization in its name, i.e., it should return "Gold Finger", "Goldmine", "Marigold", "The Baumgold Files", "GOLD FINGER", "THE GOLD FINGER", "Pure Gold", "goldfish" (these are not actual titles). But it should not return "G.O.L.D.", "Goolders", or "Gol Depression". In other words, look for the occurrence of the four character sequence [Gg][Oo][Ll][Dd]
+```{r}
+names_like_gold<- "SELECT film.title, language.name AS language, film.length
+FROM film
+JOIN language ON film.language_id = language.language_id
+WHERE film.title LIKE '%gold%' ;"
+results <- dbGetQuery(con,names_like_gold)
+print(results)
+```
+
+## Question 10:
+Get the query plan for (9). Does it use the index you created? If not, why do you think it didn't?
+```{r}
+query_10<-dbGetQuery(con,paste("EXPLAIN QUERY PLAN",names_like_gold))
+print(query_10)
+```
+Reasons why the index was not used for the above query: 
+1. Low cardinality of title column (only 8 unique values). 
+2. Query predicate not selective enough. 
+3. Non-selective LIKE pattern ("%gold%") used in WHERE clause.
+
+```{r}
+dbDisconnect(con)
+```
+

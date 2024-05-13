@@ -1,0 +1,132 @@
+---
+title: "Explore and Mine Data"
+date: "Spring23"
+output: html_notebook
+---
+# Part 3:
+```{r Connection}
+# load required libraries 
+library(DBI)
+library(RMySQL)
+library(knitr)
+library(dplyr)
+library(pander)
+library(ggplot2)
+
+# Connect to the database
+conn <- dbConnect(RMySQL::MySQL(), 
+                        host = "sql5.freemysqlhosting.net", 
+                        user = "sql5698877", 
+                        password ="SkexLkK9Kt",
+                        dbname = "sql5698877",
+                        db_port = 3306)
+```
+
+## Analytical Query I: 
+Top five sales reps with the most sales broken down by year. So, for each year for which there is data, the top five reps for that year. Think about how you would best present this information so it is easily usable by an analyst or manager.
+
+```{r}
+Query1 <- "
+  SELECT rep_id, firstName, lastName, year, sum(total_sales) AS totalsales
+  FROM rep_facts
+  GROUP BY rep_id, year
+  ORDER BY year, totalsales DESC;
+"
+query_1<-dbGetQuery(conn,Query1)
+print(query_1)
+
+top_sales_reps <- query_1 %>%
+  group_by(year) %>%
+  top_n(5, totalsales) %>%
+  ungroup()
+
+#kable(top_sales_reps, caption = "Top five sales reps with the most sales broken down by year.")
+
+pander(top_sales_reps, caption = "Top five sales reps with the most sales broken down by year.")
+
+```
+## Analytical Query II: 
+Total sold per product per quarter. Think about how to best display this information.
+
+### Aim: 
+To analyze quarterly sales data to uncover trends and patterns in product performance over time.
+### Objective: 
+To identify top-performing products each quarter and determine sales consistency and growth across different periods for strategic decision-making.
+
+### Observations:
+The product 'Zalofen' stood out with a remarkably high sales peak in the second quarter of 2021, where total sales surged to 62,472. This figure significantly surpassed the sales volumes of other products in any quarter, making it a key outlier in our analysis.'Bhiktarvizem' has demonstrated a promising trend, with sales climbing from 5,890 in Q4 of 2020 to 4,257 in Q2 of 2022. This suggests a potential growth opportunity or successful sales efforts for this product, which can guide our future sales strategies. The sales of 'Presterone' are consistent across multiple quarters, indicating a steady demand throughout the years 2020 and 2021, with sales observed in Q3 2020, Q1 and Q3 2021, and Q3 2022.
+
+Below is the graph visualization for the above.
+```{r}
+Query_2 <- "
+  SELECT year, quarter_year, product_name, SUM(total_sales) AS totalsales
+  FROM product_facts
+  GROUP BY year,quarter_year;
+"
+query2 <- dbGetQuery(conn, Query_2)
+print(query2)
+pander(query2, caption = "Total sold per product per quarter.")
+query2$quarter_year <- paste(query2$year, "Q", query2$quarter_year, sep="")
+
+
+# Calculate max sales value
+total_sales <- max(query2$totalsales)
+
+# Create the plot
+ggplot(query2, aes(x = quarter_year, y = totalsales, color=product_name)) +
+  geom_line(group = 1) +
+  geom_point() +
+  ggtitle("Total Sold Per Quarter") +
+  xlab("Quarter") +
+  ylab("Total Sales (in 1000's)") +
+  scale_y_continuous(limits = c(0, total_sales * 1.5), labels = scales::comma_format(scale = 1e-3, suffix = "K")) +
+  scale_x_discrete(breaks = unique(query2$year)) +
+  theme_minimal()
+```
+## Analytical Query III: 
+Number of units sold per product per region. Show the result in a line graph visualization.
+```{r}
+Query_3 <- "
+  SELECT product_name,region,sum(quantity) AS total_units_sold
+  FROM product_facts
+  GROUP BY product_name,region;
+"
+query3 <- dbGetQuery(conn,Query_3)
+print(query3)
+
+ggplot(query3, aes(x = region, y = total_units_sold, group = product_name, color = product_name)) +
+      geom_line() +
+      geom_point() +
+      labs(title = "Units Sold Per Product Per Region",
+           x = "Region", y = "Number of Units Sold") +
+      theme_minimal() +
+      theme(legend.position = "bottom") 
+
+```
+## Analytical Query IV: 
+Average sales per sales rep over the years. Show the result in a line graph visualization.
+```{r}
+Query_4 <- "
+  SELECT rep_id, firstName, lastName, year, quarter_year, AVG(total_sales) AS Average_sales
+  FROM rep_facts
+  GROUP BY rep_id, year
+  ORDER BY Average_sales DESC;
+"
+query4 <- dbGetQuery(conn,Query_4)
+print(query4)
+
+# Graph visualization:
+ggplot(query4,aes(x=year,y=Average_sales,color=quarter_year))+
+  geom_line() +
+  geom_point()+ 
+  labs(title = "Average Sales per Sales Rep Over the Years",
+       x = "Year", y = "Average Sales") +
+  theme_minimal() +
+  theme(legend.position = "right")   
+```
+
+# Disconnecting from database
+```{r}
+dbDisconnect(conn)
+```
+
